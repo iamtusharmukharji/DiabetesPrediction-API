@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 import logging
 from fastapi.responses import RedirectResponse
 import schemas
@@ -28,9 +28,35 @@ async def root():
 
 
 @app.post("/predict", tags=["Prediction"])
-async def predict_diabetes(input_data: schemas.DiabetesInput):
+async def predict_diabetes(input_data: schemas.DiabetesInput, enable_probability: bool = Query(False, description="Return probability and risk level")):
     """Predict diabetes based on input features."""
+    try:
+        features = [
+            input_data.age,
+            input_data.bmi,
+            input_data.hemoglobin,
+            input_data.blood_glucose_level
+            ]
+        data = np.array([features])
 
-    data = np.array([[input_data.age, input_data.bmi, input_data.hemoglobin, input_data.blood_glucose_level]])
-    prediction = model.predict(data)
-    return {"prediction": int(prediction[0])}
+        if enable_probability:
+            prediction = model.predict_proba(data)
+            # [[0.78506529 0.21493471]]
+            print(prediction)
+            prob = float(prediction[0][1])
+            risk = "High"
+            if prob >= 0.7:
+                risk = "High"
+            elif prob >= 0.4:
+                risk = "Medium"
+            else:
+                risk = "Low"
+
+            return {"success": True, "probability_%": round(prob*100, 1), "risk_level": risk}
+        else:
+            prediction = model.predict(data)
+
+            return {"success": True, "prediction": int(prediction[0])}
+    except Exception as e:
+        logger.error(f"Error during prediction: {e}")
+        return {"success": False, "error": str(e)}
